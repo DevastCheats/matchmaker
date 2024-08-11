@@ -1,31 +1,83 @@
-import os
-import re
 import requests
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from threading import Thread
+import time
 
-# Создаем папку img, если её нет
-if not os.path.exists('audio'):
-    os.makedirs('audio')
+app = Flask('')
 
-# Открываем файл 777.txt и читаем его содержимое
-with open('777.txt', 'r') as file:
-    content = file.read()
+CORS(app)
 
-# Находим все строки, содержащие "img/(название картинки).png"
-pattern = re.compile(r'audio/([^/]+\.mp3)')
-matches = pattern.findall(content)
+@app.route('/list', methods=['GET'])
+def ServersList():
+    url_ = 'https://api.rivet.gg/matchmaker/lobbies/list'
+    headers_ = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Origin": "https://devast.io"
+    }
+    servers_list = requests.get(url_, headers=headers_)
 
-# Формируем и скачиваем URL для каждой найденной картинки
-base_url = 'https://devast.io/audio/'
-
-for match in matches:
-    image_url = base_url + match
-    response = requests.get(image_url)
-    
-    if response.status_code == 200:
-        with open(os.path.join('audio', match), 'wb') as f:
-            f.write(response.content)
-        print(f'Successfully downloaded {match}')
+    if servers_list.status_code == 200:
+        response_text = servers_list.text
+        return response_text
     else:
-        print(f'Failed to download {match}')
+        return "Error fetching server list!", 500
 
-print('All images have been processed.')
+
+@app.route('/find', methods=['POST'])
+def FindServer():
+    data_ = request.get_json()
+    print(data_)
+    game_mode = data_.get("game_modes")
+    if game_mode:
+        url_ = 'https://api.rivet.gg/matchmaker/lobbies/find'
+        headers_ = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://devast.io"
+        }
+        payload_ = {"game_modes": game_mode}
+        response_ = requests.post(url_, headers=headers_, json=payload_)
+        if response_.status_code == 200:
+            response_data = response_.json()
+            return jsonify(response_data)
+        else:
+            return "Error finding server!", 500
+    else:
+        return "Invalid game mode!", 400
+
+
+@app.route('/join', methods=['POST'])
+def JoinServer():
+    data_ = request.get_json()
+    print(data_)
+    lobby_id = data_.get("lobby_id")
+    if lobby_id:
+        url_ = 'https://api.rivet.gg/matchmaker/lobbies/join'
+        headers_ = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://devast.io"
+        }
+        payload_ = {"lobby_id": lobby_id}
+        response_ = requests.post(url_, headers=headers_, json=payload_)
+
+        if response_.status_code == 200:
+            response_data = response_.json()
+            return jsonify(response_data)
+        else:
+            return "Error joining server!", 500
+    else:
+        return "Invalid lobby ID!", 400
+
+def run():
+    app.run(host="0.0.0.0", port=8080)
+
+
+def keep_alive():
+    server = Thread(target=run)
+    server.start()
+
+
+keep_alive()
